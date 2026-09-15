@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>光刻工艺需求收集｜周预约表单</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        body {
+            background-color: #f5f7fa;
+            padding: 20px;
+            max-width: 850px;
+            margin: 0 auto;
+        }
+        .container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 22px;
+        }
+        .week-info{
+            text-align:center;
+            color:#475569;
+            margin-bottom:25px;
+            font-size:14px;
+        }
+        .form-item {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color:#333;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding:10px 12px;
+            border:1px solid #cbd5e1;
+            border-radius:6px;
+            font-size:15px;
+        }
+        textarea {
+            min-height:100px;
+            resize: vertical;
+        }
+        .file-box {
+            border: 2px dashed #cbd5e1;
+            padding: 16px;
+            border-radius:6px;
+            text-align:center;
+        }
+        button {
+            width:100%;
+            padding:12px;
+            background:#2563eb;
+            color:white;
+            border:none;
+            border-radius:6px;
+            font-size:16px;
+            cursor:pointer;
+            margin-bottom:8px;
+        }
+        button:hover{
+            background:#1d4ed8;
+        }
+        .btn-newweek{
+            background:#f59e0b;
+        }
+        .btn-export{
+            background:#059669;
+        }
+        .btn-history{
+            background:#7c3aed;
+        }
+        .list-box{
+            margin-top:30px;
+            border-top:1px solid #eee;
+            padding-top:20px;
+        }
+        .item-card{
+            background:#f8fafc;
+            padding:14px;
+            border-radius:8px;
+            margin-bottom:12px;
+        }
+        .tip{
+            font-size:13px;
+            color:#64748b;
+            margin-top:4px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>光刻工艺需求收集（每周机时预约）</h1>
+    <div class="week-info" id="weekLabel">当前周：加载中...</div>
+
+    <form id="form">
+        <div class="form-item">
+            <label>姓名/课题组</label>
+            <input type="text" name="username" placeholder="填写你的名字" required>
+        </div>
+        <div class="form-item">
+            <label>EBL</label>
+            <input type="text" name="photoresist" placeholder="例：3片等" required>
+        </div>
+        <div class="form-item">
+            <label>紫外光刻 (nm)</label>
+            <input type="number" name="thickness" placeholder="例如 3片（1*1cm）" required>
+        </div>
+        <div class="form-item">
+            <label>刻蚀</label>
+            <input type="text" name="username" placeholder="例：RIE-1片-1min" required>
+        </div>
+        <div class="form-item">
+            <label>镀膜</label>
+            <input type="text" name="username" placeholder="例：10Cr/70Au" required>
+        </div>
+        <div class="form-item">
+            <label>其他工艺需求/备注</label>
+            <input type="text" name="username" placeholder="ICP-1片" required>
+        </div>
+        <div class="form-item">
+            <label>工艺特殊备注</label>
+            <textarea name="note" placeholder="如：显影时间、剥离要求、图形尺寸、是否需要去胶、特殊样品等"></textarea>
+        </div>
+        <div class="form-item">
+            <label>上传GDS版图文件 (.gds / .gdsii)</label>
+            <div class="file-box">
+                <input type="file" id="gdsFile" accept=".gds,.gdsii">
+                <div class="tip">⚠️仅记录文件名，文件不会上传网络，版图请另行发送</div>
+            </div>
+        </div>
+        <button type="submit">提交工艺需求</button>
+    </form>
+
+    <button class="btn-newweek" onclick="startNewWeek()">开启新一周收集（清空本周表单，历史记录保留）</button>
+    <button class="btn-export" onclick="exportCurrentWeek()">导出本周全部需求（复制到剪贴板）</button>
+    <button class="btn-history" onclick="showAllHistory()">查看所有历史周记录</button>
+
+    <div class="list-box">
+        <h3>本周提交需求列表</h3>
+        <div id="listWrap"></div>
+    </div>
+</div>
+
+<script>
+    const STORAGE_KEY_ALL = "litho_all_weeks";
+
+    // 获取当前年份+周号
+    function getCurrentWeekKey(){
+        const now = new Date();
+        const year = now.getFullYear();
+        const d = new Date(now.getFullYear(), 0, 1);
+        const week = Math.ceil((((now - d) / 86400000) + d.getDay() + 1) / 7);
+        return `${year}-W${week}`;
+    }
+
+    // 获取全部存储数据
+    function getAllWeeksData(){
+        const str = localStorage.getItem(STORAGE_KEY_ALL);
+        return str ? JSON.parse(str) : {};
+    }
+
+    // 获取本周数据
+    function getCurrentWeekData(){
+        const all = getAllWeeksData();
+        const key = getCurrentWeekKey();
+        return all[key] || [];
+    }
+
+    // 保存本周数据
+    function saveCurrentWeekData(list){
+        const all = getAllWeeksData();
+        const key = getCurrentWeekKey();
+        all[key] = list;
+        localStorage.setItem(STORAGE_KEY_ALL, JSON.stringify(all));
+    }
+
+    // 渲染本周列表
+    function renderCurrentWeek(){
+        const weekKey = getCurrentWeekKey();
+        document.getElementById("weekLabel").innerText = `当前收集周：${weekKey}`;
+        const dataList = getCurrentWeekData();
+        const wrap = document.getElementById("listWrap");
+        wrap.innerHTML = "";
+        if(dataList.length ===0){
+            wrap.innerHTML="<div class='tip'>暂无本周提交记录</div>";
+            return;
+        }
+        dataList.forEach((item, idx)=>{
+            const div = document.createElement("div");
+            div.className="item-card";
+            div.innerHTML = `
+                <div><strong>${idx+1}. ${item.username}</strong></div>
+                <div>光刻胶：${item.photoresist}</div>
+                <div>胶厚：${item.thickness} nm</div>
+                <div>曝光：${item.exposeType}</div>
+                <div>对准：${item.align}</div>
+                <div>备注：${item.note||"无"}</div>
+                <div>GDS文件：${item.gdsFileName||"未上传"}</div>
+                <div class="tip">提交时间：${item.time}</div>
+            `;
+            wrap.appendChild(div);
+        })
+    }
+
+    // 提交表单
+    document.getElementById("form").addEventListener("submit", function(e){
+        e.preventDefault();
+        const formData = new FormData(this);
+        const fileInput = document.getElementById("gdsFile");
+        const fileName = fileInput.files[0]?.name || "";
+
+        const record = {
+            username: formData.get("username"),
+            photoresist: formData.get("photoresist"),
+            thickness: formData.get("thickness"),
+            exposeType: formData.get("exposeType"),
+            align: formData.get("align"),
+            note: formData.get("note"),
+            gdsFileName: fileName,
+            time: new Date().toLocaleString()
+        }
+        const curList = getCurrentWeekData();
+        curList.push(record);
+        saveCurrentWeekData(curList);
+        renderCurrentWeek();
+        alert("提交成功！");
+        this.reset();
+    })
+
+    // 开启新一周
+    function startNewWeek(){
+        if(!confirm("确认开启新一周？本周表单将清空，历史周数据全部保留！")) return;
+        const curKey = getCurrentWeekKey();
+        const all = getAllWeeksData();
+        all[curKey] = [];
+        localStorage.setItem(STORAGE_KEY_ALL, JSON.stringify(all));
+        renderCurrentWeek();
+        alert("新一周表单已就绪，旧周记录仍然保存在本地！");
+    }
+
+    // 导出本周
+    function exportCurrentWeek(){
+        const weekKey = getCurrentWeekKey();
+        const dataList = getCurrentWeekData();
+        if(dataList.length === 0){
+            alert("本周暂无记录");
+            return;
+        }
+        let text = `====光刻工艺需求汇总【${weekKey}】====\n`;
+        dataList.forEach((item,i)=>{
+            text += `\n【${i+1}】\n姓名：${item.username}\n光刻胶：${item.photoresist}\n胶厚：${item.thickness} nm\n曝光方式：${item.exposeType}\n对准：${item.align}\n备注：${item.note||"无"}\nGDS版图：${item.gdsFileName||"无"}\n提交时间：${item.time}\n`
+        })
+        navigator.clipboard.writeText(text).then(()=>{
+            alert("本周全部内容已复制到剪贴板，可以粘贴到记事本/Word！");
+        })
+    }
+
+    // 查看全部历史
+    function showAllHistory(){
+        const all = getAllWeeksData();
+        let msg = "===全部历史周记录===\n";
+        const weekKeys = Object.keys(all).sort().reverse();
+        for(let wk of weekKeys){
+            const list = all[wk];
+            msg += `\n【${wk}】共${list.length}条需求`;
+        }
+        alert(msg);
+    }
+
+    renderCurrentWeek();
+</script>
+</body>
+</html>
